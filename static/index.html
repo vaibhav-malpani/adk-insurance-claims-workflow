@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>adk-insurance-claims-workflow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0b1020; --panel: #121933; --panel2: #182042; --line: #26305c; --text: #e7ecff; --muted: #8b97c7;
+    --llm: #a78bfa; --function: #60a5fa; --human: #fbbf24; --join: #2dd4bf; --start: #64748b;
+    --ok: #34d399; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--text);
+    background: radial-gradient(1200px 600px at 20% -10%, #1b2660 0%, transparent 60%), var(--bg); min-height: 100vh; }
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+  header .tag { font-size: 11px; padding: 3px 9px; border-radius: 99px; background: #1f2a5a; color: #b9c6ff; border: 1px solid var(--line); }
+  header .legend { margin-left: auto; display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  main { display: grid; grid-template-columns: 350px 1fr; gap: 16px; padding: 16px 22px 40px; }
+  .card { background: linear-gradient(180deg, var(--panel), #0f1630); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 600; }
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  textarea, input[type=text] { width: 100%; background: #0c1330; color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; font: inherit; resize: vertical; outline: none; }
+  textarea:focus, input:focus { border-color: #5b6dff; box-shadow: 0 0 0 3px #5b6dff33; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; padding: 9px 16px; color: white; font-weight: 600;
+    background: linear-gradient(135deg, #5b6dff, #8b5cf6); transition: transform .08s, filter .15s; }
+  button:hover { filter: brightness(1.12); } button:active { transform: scale(.97); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.ghost { background: #1d2750; border: 1px solid var(--line); color: var(--text); }
+  button.good { background: linear-gradient(135deg, #10b981, #34d399); color: #052e1f; }
+  button.badb { background: linear-gradient(135deg, #ef4444, #f87171); color: #3b0a0a; }
+  .presets { display: grid; gap: 8px; }
+  .preset { text-align: left; background: #0f1738; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; cursor: pointer;
+    transition: border-color .15s, transform .1s; }
+  .preset:hover { border-color: #5b6dff; transform: translateX(2px); }
+  .preset b { display: block; font-size: 13px; } .preset span { font-size: 11.5px; color: var(--muted); }
+  .preset i { float: right; font-style: normal; font-size: 10.5px; padding: 1px 7px; border-radius: 99px; border: 1px solid; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td, th { padding: 4px 4px; text-align: left; border-bottom: 1px solid #1c2550; } th { color: var(--muted); font-weight: 600; }
+  .pol { cursor: pointer; } .pol:hover td { background: #17214b; }
+  .inactive { color: var(--bad); }
+  .right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  svg { width: 100%; height: auto; display: block; }
+  .edge { fill: none; stroke: #2c3869; stroke-width: 1.6; }
+  .edge.taken { stroke: #6f82ff; stroke-width: 2.4; }
+  .edge.flow { stroke: #c7d0ff; stroke-width: 3; stroke-dasharray: 8 8; animation: dash .6s linear 2; }
+  @keyframes dash { to { stroke-dashoffset: -32; } }
+  .elabel { font-size: 10.5px; fill: #7e8ac2; paint-order: stroke; stroke: #0f1630; stroke-width: 4px; }
+  .node rect { fill: #121a3b; stroke-width: 1.8; transition: fill .25s, filter .25s; }
+  .node text.t { font-size: 12.5px; fill: var(--text); font-weight: 600; text-anchor: middle; }
+  .node text.k { font-size: 9px; text-anchor: middle; letter-spacing: 1px; text-transform: uppercase; opacity: .85; }
+  .node.idle { opacity: .55; }
+  .node.running rect { animation: pulse 1.1s ease-in-out infinite; fill: #1b2552; }
+  .node.waiting rect { animation: pulse 1.1s ease-in-out infinite; fill: #3a2d0c; }
+  .node.done rect { fill: #10281f; stroke: var(--ok) !important; }
+  .node.done, .node.running, .node.waiting { opacity: 1; }
+  .node .badge { font-size: 10px; font-weight: 700; fill: #052e1f; }
+  .node .runs { font-size: 10px; fill: #0b1020; font-weight: 700; }
+  @keyframes pulse { 0%,100% { filter: drop-shadow(0 0 2px currentColor); } 50% { filter: drop-shadow(0 0 12px currentColor); } }
+  .node.k-llm { color: var(--llm); } .node.k-function { color: var(--function); } .node.k-human { color: var(--human); }
+  .node.k-join { color: var(--join); } .node.k-start { color: var(--start); }
+  .node rect { stroke: currentColor; }
+  .bottom { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
+  .timeline { max-height: 520px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+  .ev { display: grid; grid-template-columns: 10px 1fr; gap: 10px; background: #0f1738; border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; cursor: pointer; animation: slide .3s ease-out; }
+  @keyframes slide { from { opacity: 0; transform: translateY(8px); } }
+  .ev .bar { border-radius: 4px; }
+  .ev .h { display: flex; gap: 8px; align-items: baseline; } .ev .h b { font-size: 13px; }
+  .ev .h small { color: var(--muted); margin-left: auto; font-size: 11px; }
+  .ev .route { font-size: 10.5px; padding: 0 7px; border-radius: 99px; background: #1f2a5a; color: #b9c6ff; }
+  .ev .s { color: #c3cbef; font-size: 12.5px; margin-top: 2px; }
+  .ev pre { display: none; margin: 8px 0 0; padding: 8px; background: #080d22; border-radius: 8px; font-size: 11px; overflow: auto; max-height: 200px; color: #a5b4fc; }
+  .ev.open pre { display: block; }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+  .human { border-color: #8a6a12; background: linear-gradient(180deg, #2a2208, #171305); animation: glow 1.6s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 22px #fbbf2455; } }
+  .human h2 { color: var(--human); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border: 1px solid #5b4a14; border-radius: 99px; cursor: pointer; user-select: none; }
+  .chip.on { background: #fbbf2425; border-color: var(--human); }
+  .row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .outcome { font-size: 22px; font-weight: 700; margin: 2px 0 6px; }
+  .outcome.APPROVED { color: var(--ok); } .outcome.REJECTED { color: var(--bad); } .outcome.SIU { color: var(--human); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; margin-bottom: 10px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .letter { white-space: pre-wrap; background: #0c1330; border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #d5dcff; }
+  .err { color: var(--bad); }
+  .hidden { display: none !important; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid #fff5; border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .bottom { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡️ adk-insurance-claims-workflow</h1>
+  <span class="tag">Google ADK · Graph Workflow</span>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--llm)"></i>LLM agent</span>
+    <span><i class="dot" style="background:var(--function)"></i>Function</span>
+    <span><i class="dot" style="background:var(--human)"></i>Human-in-the-loop</span>
+    <span><i class="dot" style="background:var(--join)"></i>Join (parallel merge)</span>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="card">
+      <h2>1 · File a claim</h2>
+      <textarea id="claimText" rows="6" placeholder="Describe the claim in your own words. Include a policy ID (e.g. POL-1001), what happened, the amount, and which documents you're attaching."></textarea>
+      <div class="row">
+        <button id="submit">Submit claim ▸</button>
+        <button id="reset" class="ghost">Reset</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Try a scenario</h2>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div class="card">
+      <h2>Policies you can claim against</h2>
+      <table id="policies"></table>
+      <div style="color:var(--muted);font-size:11.5px;margin-top:8px">Click a row to insert the policy ID. Required documents depend on the incident type.</div>
+    </div>
+  </aside>
+
+  <section class="right">
+    <div class="card">
+      <h2>Live workflow graph</h2>
+      <svg id="graph" viewBox="0 0 1440 540"></svg>
+    </div>
+
+    <div class="card human hidden" id="human">
+      <h2>⏸ Workflow paused — waiting for a human</h2>
+      <div id="humanBody"></div>
+    </div>
+
+    <div class="bottom">
+      <div class="card">
+        <h2>Execution timeline <span style="text-transform:none;letter-spacing:0">(click an event for raw output)</span></h2>
+        <div class="timeline" id="timeline"><div class="empty">Submit a claim to watch the graph run.</div></div>
+      </div>
+      <div class="card">
+        <h2>Result</h2>
+        <div id="result"><div class="empty">No result yet.</div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const PRESETS = [
+  { title: "Fender bender", path: "auto-approve", color: "#34d399",
+    sub: "Small, well-documented claim → straight through.",
+    text: "Hi, I'm Asha Rao, policy POL-1001. I rear-ended another car at a red light yesterday. Bumper and tail light damaged, I'm claiming $2,200. I've attached the police report and photos." },
+  { title: "Kitchen flood", path: "docs loop + human", color: "#fbbf24",
+    sub: "Missing a document, then big payout needs an adjuster.",
+    text: "Policy POL-2002 (Ben Carter). A pipe burst in our kitchen and flooded the ground floor — new floors and cabinets are ruined. Claiming $18,000. I only have photos for now." },
+  { title: "Suspicious theft", path: "SIU referral", color: "#f87171",
+    sub: "Repeat claimant + red-flag phrasing → fraud investigation.",
+    text: "Policy POL-3003, Chen Wei. My brand new laptop and camera gear were stolen, no witnesses, no receipt, and I lost the original box. Claiming $9,500. Police report attached." },
+  { title: "Lapsed policy", path: "reject", color: "#8b97c7",
+    sub: "Policy is inactive → rejected early.",
+    text: "Dana Fox, policy POL-4004. Someone hit my parked car overnight and drove off. Repair quote is $3,400. I have photos and a police report." },
+  { title: "Not covered", path: "reject", color: "#8b97c7",
+    sub: "Valid policy, but the incident type isn't covered.",
+    text: "Policy POL-1001. A fire in my garage damaged my car. I'm claiming $12,000. I have photos and the fire department report." },
+];
+
+const LAYOUT = { // [column, row]
+  __START__: [0, 2], intake: [1, 2], validate_policy: [2, 2], merge_docs: [1, 0], request_docs: [2, 0],
+  fraud_check: [3, 1], damage_assessment: [3, 2], coverage_check: [3, 3], join: [4, 2], decide: [5, 2],
+  siu_referral: [6, 0], adjuster_review: [6, 3], adjuster_decision: [7, 3], settle: [7, 1], reject: [7, 5], letter_writer: [8, 3],
+};
+const LABEL = { __START__: "START" };
+const NW = 126, NH = 46, CW = 162, RH = 86, X0 = 14, Y0 = 36;
+const KCOLOR = { llm: "#a78bfa", function: "#60a5fa", human: "#fbbf24", join: "#2dd4bf", start: "#64748b" };
+const SVGNS = "http://www.w3.org/2000/svg";
+
+let meta, nodes = {}, edges = [], es = null, runStart = 0, currentRun = null, pendingInterrupt = null;
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+const money = (n) => "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+function pos(id) { const [c, r] = LAYOUT[id] || [0, 5]; return { x: X0 + c * CW, y: Y0 + r * RH }; }
+
+function anchor(a, b) {
+  const pa = pos(a), pb = pos(b), dx = pb.x - pa.x;
+  if (Math.abs(dx) < 10) { const down = pb.y > pa.y; return { x1: pa.x + NW / 2, y1: pa.y + (down ? NH : 0), x2: pb.x + NW / 2, y2: pb.y + (down ? 0 : NH), v: true }; }
+  if (dx > 0) return { x1: pa.x + NW, y1: pa.y + NH / 2, x2: pb.x, y2: pb.y + NH / 2 };
+  return { x1: pa.x, y1: pa.y + NH / 2, x2: pb.x + NW, y2: pb.y + NH / 2 };
+}
+
+function buildGraph() {
+  const svg = $("graph"); svg.innerHTML = "";
+  const defs = el("defs", {}, svg);
+  const m = el("marker", { id: "arr", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, defs);
+  el("path", { d: "M0,0 L10,5 L0,10 z", fill: "#6f82ff" }, m);
+  edges = meta.graph.edges.map(e => {
+    const a = anchor(e.from, e.to);
+    let d;
+    if (a.v) { const my = (a.y1 + a.y2) / 2; d = `M${a.x1},${a.y1} C${a.x1},${my} ${a.x2},${my} ${a.x2},${a.y2}`; }
+    else { const mx = (a.x1 + a.x2) / 2; d = `M${a.x1},${a.y1} C${mx},${a.y1} ${mx},${a.y2} ${a.x2},${a.y2}`; }
+    const path = el("path", { d, class: "edge", "marker-end": "url(#arr)" }, svg);
+    let label = null;
+    if (e.route !== null && e.route !== undefined) {
+      label = el("text", { class: "elabel", x: (a.x1 + a.x2) / 2, y: (a.y1 + a.y2) / 2 - 3, "text-anchor": "middle" }, svg);
+      label.textContent = Array.isArray(e.route) ? e.route.join("|") : e.route;
+    }
+    return { ...e, path, label };
+  });
+  nodes = {};
+  meta.graph.nodes.forEach(n => {
+    const p = pos(n.id);
+    const g = el("g", { class: `node idle k-${n.kind}`, transform: `translate(${p.x},${p.y})` }, svg);
+    el("rect", { width: NW, height: NH, rx: 11 }, g);
+    const t = el("text", { class: "t", x: NW / 2, y: n.kind === "start" ? NH / 2 + 4 : 20 }, g); t.textContent = LABEL[n.id] || n.id;
+    if (n.kind !== "start") { const k = el("text", { class: "k", x: NW / 2, y: 36, fill: KCOLOR[n.kind] }, g); k.textContent = { llm: "LLM agent", function: "function", human: "human input", join: "join · wait all" }[n.kind]; }
+    const rb = el("circle", { cx: NW - 4, cy: 4, r: 9, fill: "#fbbf24", class: "hidden" }, g);
+    const rt = el("text", { class: "runs", x: NW - 4, y: 8, "text-anchor": "middle" }, g);
+    nodes[n.id] = { ...n, g, status: "idle", runs: 0, startedAt: 0, rb, rt };
+  });
+}
+
+function setStatus(id, s) {
+  const n = nodes[id]; if (!n) return;
+  n.status = s; n.g.setAttribute("class", `node ${s} k-${n.kind}`);
+}
+
+function activate(id) {
+  const n = nodes[id]; if (!n) return;
+  if (n.kind === "join") { if (n.status !== "done") setStatus(id, "waiting"); return; }
+  n.runs++; n.startedAt = performance.now();
+  if (n.runs > 1) { n.rb.classList.remove("hidden"); n.rt.textContent = "×" + n.runs; }
+  setStatus(id, n.kind === "human" ? "running" : "running");
+}
+
+function followEdges(from, route) {
+  edges.filter(e => e.from === from).forEach(e => {
+    const ok = e.route === null || e.route === undefined || (Array.isArray(e.route) ? e.route.includes(route) : e.route === route);
+    if (!ok) return;
+    e.path.classList.add("taken", "flow"); setTimeout(() => e.path.classList.remove("flow"), 1300);
+    activate(e.to);
+  });
+}
+
+function markHumanPredecessorsDone(id) {
+  edges.filter(e => e.to === id).forEach(e => { const p = nodes[e.from]; if (p && p.kind === "human" && p.status !== "done" && p.status !== "idle") setStatus(p.id, "done"); });
+}
+
+function summarize(node, o, text) {
+  try {
+    switch (node) {
+      case "intake": return `${o.policy_id} · ${o.incident_type} · ${money(o.claimed_amount)} · docs: ${(o.documents || []).join(", ") || "none"}`;
+      case "fraud_check": return `risk ${o.level.toUpperCase()} (${o.score})${o.signals.length ? " — " + o.signals.join("; ") : " — no red flags"}`;
+      case "damage_assessment": return `${money(o.estimated_cost)} — ${o.reasoning}`;
+      case "coverage_check": return `limit ${money(o.limit)}, deductible ${money(o.deductible)}`;
+      case "decide": return `proposed payout ${money(o.payout)}`;
+      case "settle": return `APPROVED · payout ${money(o.payout)}`;
+      case "reject": return `REJECTED — ${o.reason}`;
+      case "merge_docs": return `documents now: ${(o.documents || []).join(", ")}`;
+      case "adjuster_decision": return o.adjuster_note ? `adjuster note: “${o.adjuster_note}”` : "decision recorded";
+      case "siu_referral": return typeof o === "string" ? o : JSON.stringify(o);
+      case "validate_policy": return o.reason ? o.reason : o.missing ? `missing: ${o.missing.join(", ")}` : "policy active, incident covered, documents complete";
+      case "join": return `all ${Object.keys(o).length} parallel branches merged: ${Object.keys(o).join(", ")}`;
+      case "request_docs": return `human supplied: ${(o.documents || []).join(", ") || "nothing"}`;
+      case "adjuster_review": return `human ${o.approved ? "APPROVED" : "DENIED"}${o.note ? " ? ?" + o.note + "?" : ""}`;
+      case "letter_writer": return (text || "").slice(0, 110) + "…";
+    }
+  } catch (e) {}
+  if (text) return text.slice(0, 120);
+  return JSON.stringify(o).slice(0, 140);
+}
+
+function addTimeline(node, ev, dur) {
+  const tl = $("timeline"); if (tl.querySelector(".empty")) tl.innerHTML = "";
+  const n = nodes[node]; const color = n ? KCOLOR[n.kind] : "#64748b";
+  const d = document.createElement("div"); d.className = "ev";
+  const raw = ev.output !== null && ev.output !== undefined ? ev.output : ev.text;
+  d.innerHTML = `<div class="bar" style="background:${color}"></div><div><div class="h"><b>${node}</b>${ev.route ? `<span class="route">→ ${ev.route}</span>` : ""}<small>${dur > 50 ? (dur / 1000).toFixed(1) + "s" : ""}</small></div>
+    <div class="s"></div><pre></pre></div>`;
+  d.querySelector(".s").textContent = summarize(node, ev.output, ev.text);
+  d.querySelector("pre").textContent = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
+  d.onclick = () => d.classList.toggle("open");
+  tl.appendChild(d); tl.scrollTop = tl.scrollHeight;
+}
+
+let result = {};
+function renderResult() {
+  const r = result, box = $("result"); if (!r.kind) { return; }
+  let html = "";
+  if (r.kind === "APPROVED") html += `<div class="outcome APPROVED">✔ Approved · ${money(r.payout)}</div>`;
+  if (r.kind === "REJECTED") html += `<div class="outcome REJECTED">✖ Rejected</div><div style="margin-bottom:8px">${r.reason}</div>`;
+  if (r.kind === "SIU") html += `<div class="outcome SIU">🔎 Referred to SIU</div><div style="margin-bottom:8px">${r.reason}</div>`;
+  if (r.claim) html += `<div class="kv"><span>Policy</span><span>${r.claim.policy_id}</span><span>Incident</span><span>${r.claim.incident_type}</span><span>Claimed</span><span>${money(r.claim.claimed_amount)}</span></div>`;
+  if (r.letter) html += `<h2 style="margin-top:12px">Letter to policyholder</h2><div class="letter"></div>`;
+  box.innerHTML = html;
+  if (r.letter) box.querySelector(".letter").textContent = r.letter;
+}
+
+function onNode(ev) {
+  const id = ev.node, n = nodes[id];
+  if (!n) return;
+  const dur = n.startedAt ? performance.now() - n.startedAt : 0;
+  markHumanPredecessorsDone(id);
+  setStatus(id, "done");
+  addTimeline(id, ev, dur);
+  const o = ev.output;
+  if (id === "settle") result = { ...result, kind: "APPROVED", payout: o.payout, claim: o.claim };
+  if (id === "reject") result = { ...result, kind: "REJECTED", reason: o.reason, claim: o.claim };
+  if (id === "siu_referral") result = { ...result, kind: "SIU", reason: o };
+  if (id === "letter_writer") result.letter = ev.text;
+  if (id === "intake") result.claim = o;
+  renderResult();
+  followEdges(id, ev.route);
+}
+
+function onInput(ev) {
+  setStatus(ev.node, "waiting"); pendingInterrupt = ev;
+  const box = $("humanBody"), allDocs = [...new Set(Object.values(meta.required_docs).flat())];
+  $("human").classList.remove("hidden");
+  const decide = meta.graph.nodes.length && null;
+  if (ev.node === "request_docs") {
+    box.innerHTML = `<div>${ev.message}</div><div class="chips">${allDocs.map(d => `<label class="chip ${ev.message.includes(d) ? "on" : ""}"><input type="checkbox" value="${d}" ${ev.message.includes(d) ? "checked" : ""} hidden>${d}</label>`).join("")}</div>
+      <div class="row"><button class="good" id="sendDocs">Provide selected documents</button><button class="ghost" id="noDocs">I can't provide them</button></div>`;
+    box.querySelectorAll(".chip").forEach(c => c.onclick = (e) => { e.preventDefault(); const i = c.querySelector("input"); i.checked = !i.checked; c.classList.toggle("on", i.checked); });
+    $("sendDocs").onclick = () => respond({ documents: [...box.querySelectorAll("input:checked")].map(i => i.value) });
+    $("noDocs").onclick = () => respond({ documents: [] });
+  } else if (ev.node === "adjuster_review") {
+    box.innerHTML = `<div>${ev.message}</div><input type="text" id="note" placeholder="Optional note for the file" style="margin-top:10px">
+      <div class="row"><button class="good" id="approve">Approve payout</button><button class="badb" id="deny">Deny claim</button></div>`;
+    $("approve").onclick = () => respond({ approved: true, note: $("note").value });
+    $("deny").onclick = () => respond({ approved: false, note: $("note").value || "Denied by adjuster" });
+  } else {
+    box.innerHTML = `<div>${ev.message}</div><textarea id="raw" rows="3">{}</textarea><div class="row"><button id="sendRaw">Send</button></div>`;
+    $("sendRaw").onclick = () => respond(JSON.parse($("raw").value));
+  }
+  $("human").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function respond(response) {
+  const ev = pendingInterrupt; pendingInterrupt = null;
+  $("human").classList.add("hidden");
+  addTimeline(ev.node, { output: response, route: null, text: null }, nodes[ev.node].startedAt ? performance.now() - nodes[ev.node].startedAt : 0);
+  setStatus(ev.node, "done"); followEdges(ev.node, null);
+  await fetch(`/api/claims/${currentRun}/respond`, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ interrupt_id: ev.interrupt_id, function_name: ev.function_name, response }) });
+}
+
+function resetAll() {
+  if (es) es.close(); es = null; currentRun = null; result = {}; pendingInterrupt = null;
+  $("human").classList.add("hidden");
+  $("timeline").innerHTML = `<div class="empty">Submit a claim to watch the graph run.</div>`;
+  $("result").innerHTML = `<div class="empty">No result yet.</div>`;
+  $("submit").disabled = false; $("submit").textContent = "Submit claim ▸";
+  buildGraph();
+}
+
+async function submit() {
+  const text = $("claimText").value.trim(); if (!text) { $("claimText").focus(); return; }
+  resetAll(); $("submit").disabled = true; $("submit").innerHTML = `<span class="spin"></span>Processing…`;
+  const r = await fetch("/api/claims", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+  currentRun = (await r.json()).run_id;
+  setStatus("__START__", "done"); followEdges("__START__", null);
+  es = new EventSource(`/api/claims/${currentRun}/events`);
+  es.onmessage = (m) => {
+    const ev = JSON.parse(m.data);
+    if (ev.type === "node") onNode(ev);
+    else if (ev.type === "input_request") onInput(ev);
+    else if (ev.type === "error") { $("result").innerHTML = `<div class="err">⚠ ${ev.message}</div>`; }
+    else if (ev.type === "done") { es.close(); $("submit").disabled = false; $("submit").textContent = "Submit another ▸"; }
+  };
+}
+
+(async function init() {
+  meta = await (await fetch("/api/meta")).json();
+  $("presets").innerHTML = PRESETS.map((p, i) => `<div class="preset" data-i="${i}"><i style="color:${p.color};border-color:${p.color}66">${p.path}</i><b>${p.title}</b><span>${p.sub}</span></div>`).join("");
+  document.querySelectorAll(".preset").forEach(d => d.onclick = () => { $("claimText").value = PRESETS[d.dataset.i].text; $("claimText").focus(); });
+  $("policies").innerHTML = `<tr><th>Policy</th><th>Holder</th><th>Covers</th><th>Ded.</th></tr>` + Object.entries(meta.policies).map(([id, p]) =>
+    `<tr class="pol" data-id="${id}"><td>${id}</td><td class="${p.active ? "" : "inactive"}">${p.holder}${p.active ? "" : " (lapsed)"}</td><td>${p.covers.join(", ")}</td><td>${money(p.deductible)}</td></tr>`).join("");
+  document.querySelectorAll(".pol").forEach(r => r.onclick = () => { const t = $("claimText"); t.value = (t.value ? t.value + " " : "") + r.dataset.id; t.focus(); });
+  $("submit").onclick = submit; $("reset").onclick = resetAll;
+  buildGraph();
+})();
+</script>
+</body>
+</html>
