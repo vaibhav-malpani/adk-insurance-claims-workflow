@@ -4,6 +4,12 @@ An insurance claim processor built as a **Google ADK graph workflow**, with a li
 
 You describe a claim in plain English. The workflow extracts the details, validates the policy, runs fraud, damage and coverage checks in parallel, and routes the claim to auto-approval, a human adjuster, or a fraud investigation unit (SIU). It finishes by writing a letter to the policyholder.
 
+## Demo
+
+<video src="demo/Demo.mp4" controls="controls" style="max-width: 100%;">
+  Your browser does not support the video tag. <a href="demo/Demo.mp4">Watch Demo Video</a>
+</video>
+
 ## Why ADK workflows?
 
 A single LLM agent with tools is good at open-ended tasks. Business processes like claims are different: the steps, branches and approvals are known in advance, and you need them to run the same way every time. ADK workflows let you define that process as an explicit graph.
